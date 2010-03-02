@@ -17,9 +17,11 @@ Gem::Specification.new do |s|
   ]
   s.files = [
     ".gitignore",
+     "README.rdoc",
      "Rakefile",
      "VERSION",
      "lib/rack/ntlm.rb",
+     "rack-ntlm.gemspec",
      "test/rack_ntlm_test.rb",
      "test/test_helper.rb"
   ]
