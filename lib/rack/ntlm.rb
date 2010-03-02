@@ -1,26 +1,33 @@
 require 'net/ntlm'
+require 'net/ldap'
 
-# Rack-ntlm
 module Rack
 
   class Ntlm
     
-    def initialize(app)
+    def initialize(app, config = {})
       @app = app
+      @config = {
+        :uri_pattern => /\//,
+        :port => 389,
+        :search_filter => "(sAMAccountName=%1)"
+      }.merge(config)
     end
 
-    def auth(user, domain)
-      # ldap auth or anythings else...
-      1
+    def auth(user)
+      ldap = Net::LDAP.new
+      ldap.host = @config[:host]
+      ldap.port = @config[:port]
+      ldap.base = @config[:base]
+      ldap.auth @config[:auth][:username], @config[:auth][:password] if @config[:auth]
+      !ldap.search(:filter => @config[:search_filter].gsub("%1", user)).empty?
+    rescue => e
+      false
     end
 
     def call(env)
-
-      @status, @headers, @response = @app.call(env)
-
-      if @headers["Authorization"].blank?
-        @headers["WWW-Authenticate"] = "NTLM"
-        @status = 401
+      if env['PATH_INFO'] =~ @config[:uri_pattern] && env['HTTP_AUTHORIZATION'].blank?
+        return [401, {'WWW-Authenticate' => "NTLM"}, []]
       end
 
       if /^(NTLM|Negotiate) (.+)/ =~ env["HTTP_AUTHORIZATION"]
@@ -29,20 +36,20 @@ module Rack
 
         if message.type == 1 
           type2 = Net::NTLM::Message::Type2.new
-      		@headers["WWW-Authenticate"] = "NTLM " + type2.encode64
-      		@status = 401
+          return [401, {"WWW-Authenticate" => "NTLM " + type2.encode64}, []]
         end
 
-        if message.type == 3
-          if auth(message.user, message.domain)
-            @status = 200
+        if message.type == 3 && env['PATH_INFO'] =~ @config[:uri_pattern]
+          user = Net::NTLM::decode_utf16le(message.user)
+          if auth(user)
+            env['REMOTE_USER'] = user 
+          else
+            return [401, {}, ["You are not authorized to see this page"]]
           end
-
         end
     	end
 
-      [@status, @headers, @response]
-
+      @app.call(env)
     end
 
   end

@@ -1,6 +1,6 @@
 require 'test_helper'
 
-class Rack-ntlmTest < ActiveSupport::TestCase
+class RackNtlmTest < ActiveSupport::TestCase
   # Replace this with your real tests.
   test "the truth" do
     assert true
