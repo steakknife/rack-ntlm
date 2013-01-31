@@ -18,8 +18,8 @@ begin
 
     gem.test_files = Dir['test/**/*'] + Dir['test/*']
     
-    gem.add_dependency('rubyntlm', '0.1.1.sv1')
-    gem.add_dependency('net-ldap', '0.3.1.sv1')    
+    gem.add_dependency('rubyntlm', '0.1.2.cv')
+    gem.add_dependency('net-ldap', '0.4.0.cv')
   end
   
   Jeweler::GemcutterTasks.new
