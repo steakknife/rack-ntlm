@@ -30,12 +30,15 @@ module Rack
         return -1 # ldap unavailable
       end
 
-      search_params = { :name => name, :domain => domain }
+      search_params = { :name => name, :domain => domain, :trusts => true }
+      ldap = nil
+      ad = { :trusts => true }
+
       if is_user
-        result = activedirectory_find_users(search_params)
+        result = activedirectory_find_users(search_params, ldap, ad)
       else
-        result = activedirectory_find_computers(search_params)
-      end     
+        result = activedirectory_find_computers(search_params, ldap, ad)
+      end
       return result
     end # def ad_auth
 
