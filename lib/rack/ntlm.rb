@@ -14,33 +14,10 @@ module Rack
     end
 
     def ad_auth(name, domain, is_user)
-      if DEMO
-        msg = "Skipping authentication for #{is_user ? 'user' : 'workstation'} #{name} domain #{domain}"
-        puts "[RACKNTLM] #{msg}"
-        return -1 
-      end
- 
-      msg = "Authenticating #{is_user ? 'user' : 'workstation'} #{name} domain #{domain}"
-      puts "[RACKNTLM] #{msg}"
-      Rails.logger.info msg
-      
-      ad = activedirectory_connect
-      unless ad
-        Rails.logger.error "No LDAP server available" 
-        return -1 # ldap unavailable
-      end
+    end
 
-      search_params = { :name => name, :domain => domain, :trusts => true }
-      ldap = nil
-      ad = { :trusts => true }
-
-      if is_user
-        result = activedirectory_find_users(search_params, ldap, ad)
-      else
-        result = activedirectory_find_computers(search_params, ldap, ad)
-      end
-      return result
-    end # def ad_auth
+    def log(msg)
+    end
 
     def call(env)
       if @config[:uri_pattern].blank?
@@ -51,30 +28,29 @@ module Rack
 
       if uri_matched
         if defined?(DEBUG) && DEBUG
-          puts "\n***"
-          puts "[RACKNTLM] Authenticating URL \"#{env['PATH_INFO']}\"" 
+          log "\n***"
+          log "[RACKNTLM] Authenticating URL \"#{env['PATH_INFO']}\""
         end
       elsif env['HTTP_AUTHORIZATION']
         uri_matched = true
-        if defined?(DEBUG) && DEBUG      
-          puts "\n***"
-          #puts "[RACKNTLM] Unexpected authentication at URL \"#{env['PATH_INFO']}\"" 
-          puts "[RACKNTLM] Authorization: \"#{env['HTTP_AUTHORIZATION']}\"" 
+        if defined?(DEBUG) && DEBUG
+          log "\n***"
+          log "[RACKNTLM] Authorization: \"#{env['HTTP_AUTHORIZATION']}\""
         end
       end
 
       if uri_matched
         if env['HTTP_AUTHORIZATION'].blank?
-          Rails.logger.info "Starting NTLM authentication on URL: #{env['PATH_INFO']}"
+          log "Starting NTLM authentication on URL: #{env['PATH_INFO']}"
           return [401, {'WWW-Authenticate' => "NTLM"}, []]
         elsif NTLM_GET_HASH_REGEX =~ env['HTTP_AUTHORIZATION']
           ntlm_hash = $2
-          puts "[RACKNTLM] Hash \"#{ntlm_hash}\"" if defined?(DEBUG) && DEBUG
+          log "[RACKNTLM] Hash \"#{ntlm_hash}\"" if defined?(DEBUG) && DEBUG
           message = Net::NTLM::Message.decode64(ntlm_hash)
 
-          Rails.logger.debug "Received NTLM authentication to #{env['PATH_INFO']} (type #{message.type})"
+          log "Received NTLM authentication to #{env['PATH_INFO']} (type #{message.type})"
           domain_key = "#{env['REMOTE_ADDR']},#{env['PATH_INFO']}"
-          Rails.logger.debug "Domain key: \"#{domain_key}\""
+          log "Domain key: \"#{domain_key}\""
 
           if message.type == 1
             DOMAIN_CACHE.delete(domain_key) if DOMAIN_CACHE[domain_key]
@@ -86,9 +62,9 @@ module Rack
             type2.flag |= Net::NTLM::FLAGS[:KEY56]
             type2.challenge = rand((2**64) - 1)
 
-            Rails.logger.debug "Workstation: \"#{message.workstation}\""
+            log "Workstation: \"#{message.workstation}\""
             if message.workstation != message.domain
-              Rails.logger.debug "Workstation #{message.workstation} on domain #{message.domain}"
+              log "Workstation #{message.workstation} on domain #{message.domain}"
               DOMAIN_CACHE[domain_key] = message.domain
             end
 
@@ -98,8 +74,8 @@ module Rack
             unless message.user.blank?
               user = message.user.to_s
               user = Net::NTLM::decode_utf16le(message.user)
-              env['USERNAME'] = user 
-              Rails.logger.debug "User: \"#{user}\""
+              env['USERNAME'] = user
+              log "User: \"#{user}\""
 
               # For username logins, don't keep cache
               DOMAIN_CACHE.delete(domain_key) if DOMAIN_CACHE[domain_key]
@@ -108,23 +84,23 @@ module Rack
             unless message.workstation.blank?
               workstation = Net::NTLM::decode_utf16le(message.workstation)
               env['WORKSTATION'] = workstation
-              Rails.logger.debug "Workstation: \"#{workstation}\""
+              log "Workstation: \"#{workstation}\""
             end
 
             domain = nil
             unless message.domain.blank?
               domain = Net::NTLM::decode_utf16le(message.domain)
-              Rails.logger.debug "Domain: \"#{domain}\""
+              log "Domain: \"#{domain}\""
             end
             if domain.blank? && !DOMAIN_CACHE[domain_key].blank?
                domain = DOMAIN_CACHE[domain_key]
-               Rails.logger.debug "Using previously cached domain: \"#{domain}\""
+               log "Using previously cached domain: \"#{domain}\""
             end
             #domain = "WORKGROUP" if domain.blank?
             env['DOMAIN'] = domain
 
             if ENV['NO_AD'] && ENV['NO_AD'].to_i == 1
-              Rails.logger.info "Skipping LDAP Authentication"
+              log "Skipping LDAP Authentication"
               env['AD_NOAUTH'] = "1"
 
             elsif user.blank? || user[-1].chr == '$'
@@ -132,21 +108,18 @@ module Rack
               # Computer authentication
               #############################################
 
-              anomaly_check(workstation[-1].chr != '$')
               workstation += '$' if workstation[-1].chr != '$'
-              anomaly_check(workstation == user) unless user.blank?
 
               @results = ad_auth(workstation, domain, false)
               if @results == -1 # ldap unavailable
                 env['AD_NOAUTH'] = "1"
-                Rails.logger.debug "Unable to authenticate workstation #{workstation} domain #{domain} (no LDAP server)"
+                log "Unable to authenticate workstation #{workstation} domain #{domain} (no LDAP server)"
 
               elsif @results
-                anomaly_check(!@results.empty?)
                 env['AD_ENTRY'] = @results.first
 
               else
-                Rails.logger.info "Unable to authenticate workstation #{workstation} domain #{domain} (no such workstation)"
+                log "Unable to authenticate workstation #{workstation} domain #{domain} (no such workstation)"
                 env['AD_FAILEDAUTH'] = "1"
                 #return [401, {}, ['You are not authorized to see this page']]
               end
@@ -159,14 +132,13 @@ module Rack
               @results = ad_auth(user, domain, true)
               if @results == -1 # ldap unavailable
                 env['AD_NOAUTH'] = "1"
-                Rails.logger.debug "Unable to authenticate user #{user} domain #{domain} (no LDAP server)"
+                log "Unable to authenticate user #{user} domain #{domain} (no LDAP server)"
 
               elsif @results
-                anomaly_check(!@results.empty?)
                 env['AD_ENTRY'] = @results.first
 
               else
-                Rails.logger.info "Unable to authenticate user #{user} domain #{domain} (no such user)"
+                log "Unable to authenticate user #{user} domain #{domain} (no such user)"
                 env['AD_FAILEDAUTH'] = "1"
                 #return [401, {}, ['You are not authorized to see this page']]
               end
