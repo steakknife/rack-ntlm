@@ -42,14 +42,14 @@ Gem::Specification.new do |s|
     s.specification_version = 3
 
     if Gem::Version.new(Gem::RubyGemsVersion) >= Gem::Version.new('1.2.0') then
-      s.add_runtime_dependency(%q<rubyntlm>, ["0.1.2.cv"])
+      s.add_runtime_dependency(%q<rubyntlm>, ["0.1.3.cv"])
       s.add_runtime_dependency(%q<net-ldap>, ["0.4.0.cv"])
     else
-      s.add_dependency(%q<rubyntlm>, ["0.1.2.cv"])
+      s.add_dependency(%q<rubyntlm>, ["0.1.3.cv"])
       s.add_dependency(%q<net-ldap>, ["0.4.0.cv"])
     end
   else
-    s.add_dependency(%q<rubyntlm>, ["0.1.2.cv"])
+    s.add_dependency(%q<rubyntlm>, ["0.1.3.cv"])
     s.add_dependency(%q<net-ldap>, ["0.4.0.cv"])
   end
 end
