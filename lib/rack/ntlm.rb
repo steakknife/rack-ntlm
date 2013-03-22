@@ -18,12 +18,12 @@ module Rack
 
     def auth(env, user, workstation, domain)
       return @authenticator.auth(env, user, workstation, domain) if @authenticator && @authenticator.respond_to?(:auth)
-      logger.error "You must pass an :authenticator that responds to #auth(env, user, workstation, domain) during middleware setup"
+      logger.error 'You must pass an :authenticator that responds to #auth(env, user, workstation, domain) during middleware setup'
     end
 
     def call(env)
       return @app.call(env) unless authenticatable_url?(env)
-      return auth_response if auth_required?(env)
+      return auth_response(env) if auth_required?(env)
 
       message    = decode_message(env)
       domain_key = generate_domain_key(env)
@@ -82,9 +82,9 @@ module Rack
 
     ### Responses
 
-    def auth_response
+    def auth_response(env)
       logger.info "Starting NTLM authentication on URL: #{env['PATH_INFO']}"
-      [401, {'WWW-Authenticate' => "NTLM"}, []]
+      [401, {'WWW-Authenticate' => 'NTLM'}, []]
     end
 
     def unsupported_response
@@ -92,7 +92,7 @@ module Rack
     end
 
     def challenge_response
-      [401, {"WWW-Authenticate" => challenge_message}, []]
+      [401, {'WWW-Authenticate' => challenge_message}, []]
     end
 
     def challenge_message
@@ -104,7 +104,7 @@ module Rack
       type2.flag      |= Net::NTLM::FLAGS[:KEY56]
       type2.challenge = challenge_token
 
-      "NTLM " + type2.encode64
+      'NTLM ' + type2.encode64
     end
 
     def challenge_token
