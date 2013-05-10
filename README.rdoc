@@ -1,7 +1,5 @@
 = Rack-ntlm
 
-;)
-
 == Description
 
 Rack middleware for transparent authentication with NTLM.
