@@ -115,7 +115,10 @@ module Rack
     ### Domain key
 
     def generate_domain_key(env)
-      domain_key = "#{env['REMOTE_ADDR']},#{env['PATH_INFO']}"
+      ip = env['HTTP_X_REAL_IP']
+      ip = env['HTTP_X_FORWARDED_FOR'] unless ip && ip.length > 0
+      ip = env['REMOTE_ADDR'] unless ip && ip.length > 0
+      domain_key = "#{ip},#{env['PATH_INFO']}"
       logger.info "Domain key: \"#{domain_key}\""
       domain_key
     end
