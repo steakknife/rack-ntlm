@@ -2,7 +2,6 @@ require 'net/ntlm'
 
 module Rack
   class Ntlm
-    DOMAIN_CACHE = {}
     NTLM_GET_HASH_REGEX = /^(NTLM|Negotiate) (.+)/
 
     def initialize(app, config = {})
@@ -26,18 +25,14 @@ module Rack
       return auth_response(env) if auth_required?(env)
 
       message    = decode_message(env)
-      domain_key = generate_domain_key(env)
 
       if challenge_request?(message)
-        cache_domain_key(domain_key, message)
         return challenge_response
 
       elsif type3_request?(message)
         user        = extract_user(env, message)
         workstation = extract_workstation(env, message)
-        domain      = extract_domain(env, message, domain_key)
-
-        forget_domain_key(domain_key)
+        domain      = extract_domain(env, message)
 
         auth(env, user, workstation, domain)
 
@@ -129,31 +124,6 @@ module Rack
     end
 
 
-    ### Domain key
-
-    def generate_domain_key(env)
-      ip = env['HTTP_X_REAL_IP']
-      ip = env['HTTP_X_FORWARDED_FOR'] unless ip && ip.length > 0
-      ip = env['REMOTE_ADDR'] unless ip && ip.length > 0
-      domain_key = "#{ip},#{env['PATH_INFO']}"
-      logger.info "Domain key: \"#{domain_key}\""
-      domain_key
-    end
-
-    def cache_domain_key(domain_key, message)
-      forget_domain_key(domain_key)
-
-      if message.workstation != message.domain
-        logger.debug "Caching domain #{message.domain} for workstation #{message.workstation}"
-        DOMAIN_CACHE[domain_key] = message.domain
-      end
-    end
-
-    def forget_domain_key(domain_key)
-      DOMAIN_CACHE.delete(domain_key)
-    end
-
-
     ### Decode
 
     def decode_message(env)
@@ -166,14 +136,9 @@ module Rack
       message
     end
 
-    def extract_domain(env, message, domain_key)
+    def extract_domain(env, message)
       domain = Net::NTLM::decode_utf16le(message.domain.to_s)
       logger.info "Domain: \"#{domain}\""
-
-      if domain.blank?
-        domain = DOMAIN_CACHE.delete(domain_key)
-        logger.info "Using previously cached domain: \"#{domain}\""
-      end
 
       env['DOMAIN'] = domain
 
