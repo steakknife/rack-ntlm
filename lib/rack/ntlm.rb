@@ -4,15 +4,13 @@ module Rack
   class Ntlm
     NTLM_GET_HASH_REGEX = /^(NTLM|Negotiate) (.+)/
 
+    attr_reader :logger
+
     def initialize(app, config = {})
       @app    = app
       @config = {}.merge(config)
       @logger = @config[:logger] || ::Logger.new(STDOUT)
       @authenticator = @config[:authenticator]
-    end
-
-    def logger
-      @logger
     end
 
     def auth(env, user, workstation, domain)
@@ -24,7 +22,7 @@ module Rack
       return @app.call(env) unless authenticatable_url?(env)
       return auth_response(env) if auth_required?(env)
 
-      message    = decode_message(env)
+      message = decode_message(env)
 
       if challenge_request?(message)
         return challenge_response
@@ -129,7 +127,7 @@ module Rack
     def decode_message(env)
       NTLM_GET_HASH_REGEX =~ env['HTTP_AUTHORIZATION']
       ntlm_hash = $2
-      logger.debug "Hash \"#{ntlm_hash}\""
+      logger.debug %/Hash "#{ntlm_hash}"/
       message = Net::NTLM::Message.decode64(ntlm_hash)
       logger.debug "Message: #{message.inspect}"
       logger.info "Received NTLM authentication to #{env['PATH_INFO']} (type #{message.type})"
@@ -138,7 +136,7 @@ module Rack
 
     def extract_domain(env, message)
       domain = Net::NTLM::decode_utf16le(message.domain.to_s)
-      logger.info "Domain: \"#{domain}\""
+      logger.info %/Domain: "#{domain}"/
 
       env['DOMAIN'] = domain
 
@@ -148,7 +146,7 @@ module Rack
     def extract_workstation(env, message)
       workstation = Net::NTLM::decode_utf16le(message.workstation.to_s)
 
-      logger.info "Workstation: \"#{workstation}\""
+      logger.info %/Workstation: "#{workstation}"/
       env['WORKSTATION'] = workstation
 
       workstation
@@ -157,7 +155,7 @@ module Rack
     def extract_user(env, message)
       user = Net::NTLM::decode_utf16le(message.user.to_s)
 
-      logger.info "User: \"#{user}\""
+      logger.info %/User: "#{user}"/
       env['USERNAME'] = user
 
       user
