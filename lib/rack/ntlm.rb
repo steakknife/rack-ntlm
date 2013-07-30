@@ -1,8 +1,9 @@
 require 'net/ntlm'
+require 'debugger' if DEBUG
 
 module Rack
   class Ntlm
-    DOMAIN_CACHE = {}
+    DOMAIN_CACHE = nil # change to Hash.new to enable
     NTLM_GET_HASH_REGEX = /^(NTLM|Negotiate) (.+)/
 
     def initialize(app, config = {})
@@ -26,18 +27,15 @@ module Rack
       return auth_response(env) if auth_required?(env)
 
       message    = decode_message(env)
-      domain_key = generate_domain_key(env)
 
       if challenge_request?(message)
-        cache_domain_key(domain_key, message)
+        cache_domain_key(domain_key, message) if DOMAIN_CACHE
         return challenge_response
 
       elsif type3_request?(message)
         user        = extract_user(env, message)
         workstation = extract_workstation(env, message)
-        domain      = extract_domain(env, message, domain_key)
-
-        forget_domain_key(domain_key)
+        domain      = extract_domain(env, message)
 
         auth(env, user, workstation, domain)
 
@@ -56,15 +54,24 @@ module Rack
       else
         uri_matched = true
       end
+      
+      if env['QUERY_STRING'].index('os=linux')
+        logger.debug 'Skipping authentication for URL "%s"' % [env['PATH_INFO']]
+        authenticatable = false
 
-      if uri_matched
+      elsif uri_matched
         logger.info 'Authenticating URL "%s"' % [env['PATH_INFO']]
+        authenticatable = true
+
       elsif env['HTTP_AUTHORIZATION']
-        uri_matched = true
+        authenticatable = true
         logger.info 'Authorization: "%s"' % [env['HTTP_AUTHORIZATION']]
+                
+      else
+        authenticatable = false
       end
 
-      uri_matched
+      authenticatable
     end
 
     def auth_required?(env)
@@ -119,16 +126,16 @@ module Rack
       ip = env['HTTP_X_FORWARDED_FOR'] unless ip && ip.length > 0
       ip = env['REMOTE_ADDR'] unless ip && ip.length > 0
       domain_key = "#{ip},#{env['PATH_INFO']}"
-      logger.info "Domain key: \"#{domain_key}\""
+      logger.debug "Domain key: \"#{domain_key}\""
       domain_key
     end
 
     def cache_domain_key(domain_key, message)
-      forget_domain_key(domain_key)
-
       if message.workstation != message.domain
         logger.debug "Caching domain #{message.domain} for workstation #{message.workstation}"
         DOMAIN_CACHE[domain_key] = message.domain
+      else
+        forget_domain_key(domain_key)
       end
     end
 
@@ -149,13 +156,20 @@ module Rack
       message
     end
 
-    def extract_domain(env, message, domain_key)
+    def extract_domain(env, message)
       domain = Net::NTLM::decode_utf16le(message.domain.to_s)
       logger.info "Domain: \"#{domain}\""
 
       if domain.blank?
-        domain = DOMAIN_CACHE.delete(domain_key)
-        logger.info "Using previously cached domain: \"#{domain}\""
+        debugger if DEBUG
+        if DOMAIN_CACHE
+          domain_key = generate_domain_key(env)
+          domain = DOMAIN_CACHE.delete(domain_key)
+          logger.info "Using previously cached domain: \"#{domain}\""
+        end
+        
+      else
+        forget_domain_key(domain_key)
       end
 
       env['DOMAIN'] = domain
