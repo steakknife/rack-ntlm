@@ -51,14 +51,27 @@ module Rack
     ### States
 
     def authenticatable_url?(env)
+      authenticatable = true  # authenticate by default
+
       if @config.has_key?(:agent_pattern)
-        authenticatable = env['HTTP_USER_AGENT'] =~ @config[:agent_pattern]
-      elsif @config.has_key?(:query_pattern)
-        authenticatable = env['QUERY_STRING'] =~ @config[:query_pattern]
-      elsif @config.has_key?(:uri_pattern)
-        authenticatable = (env['PATH_INFO'] =~ @config[:uri_pattern])
-      else
-        authenticatable = true
+        unless env['HTTP_USER_AGENT'] =~ @config[:agent_pattern]
+          authenticatable = false
+          logger.debug %/Skip authentication: User agent "#{env['HTTP_USER_AGENT']}" did not match "#{@config[:agent_pattern]}"/
+        end
+      end
+
+      if @config.has_key?(:query_pattern)
+        unless env['QUERY_STRING'] =~ @config[:query_pattern]
+          authenticatable = false
+          logger.debug %/Skip authentication: Query "#{env['QUERY_STRING']}" did not match "#{@config[:query_pattern]}"/
+        end
+      end
+
+      if @config.has_key?(:uri_pattern)
+        unless env['PATH_INFO'] =~ @config[:uri_pattern]
+          authenticatable = false
+          logger.debug %/Skip authentication: User agent "#{env['PATH_INFO']}" did not match "#{@config[:uri_pattern]}"/
+        end
       end
 
       if authenticatable
