@@ -51,20 +51,24 @@ module Rack
     ### States
 
     def authenticatable_url?(env)
-      if @config.has_key?(:uri_pattern)
-        uri_matched = (env['PATH_INFO'] =~ @config[:uri_pattern])
+      if @config.has_key?(:agent_pattern)
+        authenticatable = env['HTTP_USER_AGENT'] =~ @config[:agent_pattern]
+      elsif @config.has_key?(:query_pattern)
+        authenticatable = env['QUERY_STRING'] =~ @config[:query_pattern]
+      elsif @config.has_key?(:uri_pattern)
+        authenticatable = (env['PATH_INFO'] =~ @config[:uri_pattern])
       else
-        uri_matched = true
+        authenticatable = true
       end
 
-      if uri_matched
+      if authenticatable
         logger.info 'Authenticating URL "%s"' % [env['PATH_INFO']]
       elsif env['HTTP_AUTHORIZATION']
-        uri_matched = true
+        authenticatable = true
         logger.info 'Authorization: "%s"' % [env['HTTP_AUTHORIZATION']]
       end
 
-      uri_matched
+      authenticatable
     end
 
     def auth_required?(env)
