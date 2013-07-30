@@ -5,7 +5,7 @@
 
 Gem::Specification.new do |s|
   s.name = %q{rack-ntlm}
-  s.version = "0.1.4.cv"
+  s.version = "0.2.0.cv"
 
   s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
   s.authors = ["Danilo Sato", "Matt Conover", "Steve Lawson"]
