@@ -8,9 +8,11 @@ This is a fork from lukefx/rack-ntlm on Github. This fork previous used net/ldap
 
 This is work in progress, so contributions are welcome.
 
+
 == Dependencies
 
 * rubyntlm (gem install rubyntlm)
+
 
 == Usage (with Rails):
  
@@ -21,11 +23,23 @@ gem 'rack-ntlm', '0.1.4.cv', :git => 'git://github.com/cloudvolumes/rack-ntlm.gi
 
 Initializer:
 
+  # Match all requests
+  # All requests require authentication by default.
   config.middleware.use "Rack::Ntlm", {
-    :uri_pattern => /\/login/                       # (default = /\//) (any URL)
     :logger => Log4r::Logger['ntlm'],               # any logger that quacks like a ruby Logger (.debug, .info) etc
     :authenticator => YourOwnAuthObject.new()       # .auth(env, user, workstation, domain) will be called
   }
+
+  # If any of the provided patterns do not match, authentication is skipped for that request.
+  # Match a request to /login?something=1&other=2 using Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.1; Trident/6.0)
+  config.middleware.use "Rack::Ntlm", {
+    :uri_pattern => /\/login/,                      # Pattern must match ENV['PATH_INFO'] (optional)
+    :query_pattern => /something=1/,                # Pattern must match ENV['QUERY_STRING'] (optional)
+    :agent_pattern => /windows/,                    # Pattern must match ENV['HTTP_USER_AGENT'] (optional)
+    :logger => Log4r::Logger['ntlm'],               # any logger that quacks like a ruby Logger (.debug, .info) etc
+    :authenticator => YourOwnAuthObject.new()       # .auth(env, user, workstation, domain) will be called
+  }
+
 
 == Example
 
@@ -46,6 +60,7 @@ When a client needs to authenticate itself to a proxy or server using the NTLM s
               Authorization: NTLM <base64-encoded type-3-message>
 
 6: C <--  S   200 Ok
+
 
 == Copyright
 
