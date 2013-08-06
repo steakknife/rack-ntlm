@@ -19,7 +19,7 @@ This is work in progress, so contributions are welcome.
 Gemfile:
 
 gem 'rubyntlm',  :git => 'git://github.com/cloudvolumes/rubyntlm.git', :branch => :master
-gem 'rack-ntlm', '0.2.0.cv', :git => 'git://github.com/cloudvolumes/rack-ntlm.git', :branch => :master
+gem 'rack-ntlm', :git => 'git://github.com/cloudvolumes/rack-ntlm.git', :branch => :master
 
 Initializer:
 
