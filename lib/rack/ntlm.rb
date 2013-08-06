@@ -63,7 +63,7 @@ module Rack
       if @config.has_key?(:uri_pattern)
         unless env['PATH_INFO'] =~ @config[:uri_pattern]
           authenticatable = false
-          logger.debug %/Skip authentication: User agent "#{env['PATH_INFO']}" did not match "#{@config[:uri_pattern]}"/
+          logger.debug %/Skip authentication: URI "#{env['PATH_INFO']}" did not match "#{@config[:uri_pattern]}"/
         end
       end
 
