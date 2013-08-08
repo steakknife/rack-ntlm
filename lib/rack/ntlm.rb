@@ -127,7 +127,7 @@ module Rack
     def decode_message(env)
       NTLM_GET_HASH_REGEX =~ env['HTTP_AUTHORIZATION']
       ntlm_hash = $2
-      logger.debug %/Hash "#{ntlm_hash}"/
+      #logger.debug %/Hash "#{ntlm_hash}"/
       message = Net::NTLM::Message.decode64(ntlm_hash)
       logger.debug "Message: #{message.inspect}"
       logger.info "Received NTLM authentication to #{env['PATH_INFO']} (type #{message.type})"
