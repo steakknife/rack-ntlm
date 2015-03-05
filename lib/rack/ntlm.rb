@@ -15,7 +15,7 @@ module Rack
 
     def auth(env, user, workstation, domain)
       return @authenticator.auth(env, user, workstation, domain) if @authenticator && @authenticator.respond_to?(:auth)
-      logger.error 'You must pass an :authenticator that responds to #auth(env, user, workstation, domain) during middleware setup'
+      @logger.error 'You must pass an :authenticator that responds to #auth(env, user, workstation, domain) during middleware setup'
     end
 
     def call(env)
@@ -49,29 +49,29 @@ module Rack
       if @config.has_key?(:agent_pattern)
         unless env['HTTP_USER_AGENT'] =~ @config[:agent_pattern]
           authenticatable = false
-          logger.debug %/Skip authentication: User agent "#{env['HTTP_USER_AGENT']}" did not match "#{@config[:agent_pattern]}"/
+          @logger.debug %/Skip authentication: User agent "#{env['HTTP_USER_AGENT']}" did not match "#{@config[:agent_pattern]}"/
         end
       end
 
       if @config.has_key?(:query_pattern)
         unless env['QUERY_STRING'] =~ @config[:query_pattern]
           authenticatable = false
-          logger.debug %/Skip authentication: Query "#{env['QUERY_STRING']}" did not match "#{@config[:query_pattern]}"/
+          @logger.debug %/Skip authentication: Query "#{env['QUERY_STRING']}" did not match "#{@config[:query_pattern]}"/
         end
       end
 
       if @config.has_key?(:uri_pattern)
         unless env['PATH_INFO'] =~ @config[:uri_pattern]
           authenticatable = false
-          logger.debug %/Skip authentication: URI "#{env['PATH_INFO']}" did not match "#{@config[:uri_pattern]}"/
+          @logger.debug %/Skip authentication: URI "#{env['PATH_INFO']}" did not match "#{@config[:uri_pattern]}"/
         end
       end
 
       if authenticatable
-        logger.info 'Authenticating URL "%s"' % [env['PATH_INFO']]
+        @logger.info 'Authenticating URL "%s"' % [env['PATH_INFO']]
       elsif env['HTTP_AUTHORIZATION']
         authenticatable = true
-        logger.info 'Authorization: "%s"' % [env['HTTP_AUTHORIZATION']]
+        @logger.info 'Authorization: "%s"' % [env['HTTP_AUTHORIZATION']]
       end
 
       authenticatable
@@ -93,7 +93,7 @@ module Rack
     ### Responses
 
     def auth_response(env)
-      logger.info "Starting NTLM authentication on URL: #{env['PATH_INFO']}"
+      @logger.info "Starting NTLM authentication on URL: #{env['PATH_INFO']}"
       [401, {'WWW-Authenticate' => 'NTLM'}, []]
     end
 
@@ -129,14 +129,14 @@ module Rack
       ntlm_hash = $2
       #logger.debug %/Hash "#{ntlm_hash}"/
       message = Net::NTLM::Message.decode64(ntlm_hash)
-      logger.debug "Message: #{message.inspect}"
-      logger.info "Received NTLM authentication to #{env['PATH_INFO']} (type #{message.type})"
+      @logger.debug "Message: #{message.inspect}"
+      @logger.info "Received NTLM authentication to #{env['PATH_INFO']} (type #{message.type})"
       message
     end
 
     def extract_domain(env, message)
       domain = Net::NTLM::decode_utf16le(message.domain.to_s)
-      logger.info %/Domain: "#{domain}"/
+      @logger.info %/Domain: "#{domain}"/
 
       env['DOMAIN'] = domain
 
@@ -146,7 +146,7 @@ module Rack
     def extract_workstation(env, message)
       workstation = Net::NTLM::decode_utf16le(message.workstation.to_s)
 
-      logger.info %/Workstation: "#{workstation}"/
+      @logger.info %/Workstation: "#{workstation}"/
       env['WORKSTATION'] = workstation
 
       workstation
@@ -155,7 +155,7 @@ module Rack
     def extract_user(env, message)
       user = Net::NTLM::decode_utf16le(message.user.to_s)
 
-      logger.info %/User: "#{user}"/
+      @logger.info %/User: "#{user}"/
       env['USERNAME'] = user
 
       user
