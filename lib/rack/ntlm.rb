@@ -127,38 +127,36 @@ module Rack
     def decode_message(env)
       NTLM_GET_HASH_REGEX =~ env['HTTP_AUTHORIZATION']
       ntlm_hash = $2
-      #logger.debug %/Hash "#{ntlm_hash}"/
+
       message = Net::NTLM::Message.decode64(ntlm_hash)
       @logger.debug "Message: #{message.inspect}"
       @logger.info "Received NTLM authentication to #{env['PATH_INFO']} (type #{message.type})"
+
       message
     end
 
     def extract_domain(env, message)
       domain = Net::NTLM::decode_utf16le(message.domain.to_s)
+
       @logger.info %/Domain: "#{domain}"/
 
       env['DOMAIN'] = domain
-
-      domain
     end
 
     def extract_workstation(env, message)
       workstation = Net::NTLM::decode_utf16le(message.workstation.to_s)
 
       @logger.info %/Workstation: "#{workstation}"/
-      env['WORKSTATION'] = workstation
 
-      workstation
+      env['WORKSTATION'] = workstation
     end
 
     def extract_user(env, message)
       user = Net::NTLM::decode_utf16le(message.user.to_s)
 
       @logger.info %/User: "#{user}"/
-      env['USERNAME'] = user
 
-      user
+      env['USERNAME'] = user
     end
 
   end
