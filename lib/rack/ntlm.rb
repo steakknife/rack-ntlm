@@ -24,9 +24,10 @@ module Rack
 
       message = decode_message(env)
 
-      if challenge_request?(message)
-        return challenge_response
-
+      if message.nil?
+        @app.call(env)
+      elsif challenge_request?(message)
+        challenge_response
       elsif type3_request?(message)
         user        = extract_user(env, message)
         workstation = extract_workstation(env, message)
@@ -34,10 +35,10 @@ module Rack
 
         auth(env, user, workstation, domain)
 
-        return @app.call(env)
+        @app.call(env)
+      else
+        unsupported_response
       end
-
-      unsupported_response
     end
 
 
@@ -69,7 +70,7 @@ module Rack
 
       if authenticatable
         @logger.info 'Authenticating URL "%s"' % [env['PATH_INFO']]
-      elsif env['HTTP_AUTHORIZATION']
+      elsif ntlm_authorization?(env)
         authenticatable = true
         @logger.info 'Authorization: "%s"' % [env['HTTP_AUTHORIZATION']]
       end
@@ -77,16 +78,20 @@ module Rack
       authenticatable
     end
 
+    def ntlm_authorization?(env)
+      NTLM_GET_HASH_REGEX =~ env['HTTP_AUTHORIZATION']
+    end
+
     def auth_required?(env)
       !env.has_key?('HTTP_AUTHORIZATION')
     end
 
     def challenge_request?(message)
-      1 == message.type
+      message && 1 == message.type
     end
 
     def type3_request?(message)
-      3 == message.type
+      message && 3 == message.type
     end
 
 
@@ -125,10 +130,11 @@ module Rack
     ### Decode
 
     def decode_message(env)
-      NTLM_GET_HASH_REGEX =~ env['HTTP_AUTHORIZATION']
-      ntlm_hash = $2
+      matches = env['HTTP_AUTHORIZATION'].to_s.match(NTLM_GET_HASH_REGEX) or return nil
 
+      ntlm_hash = matches.captures[1].to_s
       message = Net::NTLM::Message.decode64(ntlm_hash)
+
       @logger.debug "Message: #{message.inspect}"
       @logger.info "Received NTLM authentication to #{env['PATH_INFO']} (type #{message.type})"
 
