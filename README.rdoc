@@ -4,43 +4,42 @@
 
 Rack middleware for transparent authentication with NTLM.
 
-This is a fork from lukefx/rack-ntlm on Github. This makes the Rack middleware a gem and uses net/ldap to search the user against an ActiveDirectory server.
+This is a fork from lukefx/rack-ntlm on Github. This fork previous used net/ldap to search the user against an ActiveDirectory server. The requirement of net/ldap has been removed in favor of an external authenticator object.
 
 This is work in progress, so contributions are welcome.
 
-== Known Limitations (TO-DOs):
-
-* Due to the user-provided password not being available on the NTLM Type3 message, this middleware is only verifying the existence of the user on AD, and not binding as that user (which would require password)
-* Failure on the NTLM authentication or LDAP search will simply return 401 with a response body saying "You are not authorized to see this page"
 
 == Dependencies
 
 * rubyntlm (gem install rubyntlm)
-* net/ldap (gem install net-ldap)
+
+
 == Usage (with Rails):
  
-On your config/environment.rb:
- 
-  config.gem 'rubyntlm', :lib => 'net/ntlm'
-  config.gem 'net-ldap', :lib => 'net/ldap'
-  config.gem 'rack-ntlm'
+Gemfile:
 
+gem 'rubyntlm',  :git => 'git://github.com/cloudvolumes/rubyntlm.git', :branch => :master
+gem 'rack-ntlm', :git => 'git://github.com/cloudvolumes/rack-ntlm.git', :branch => :master
+
+Initializer:
+
+  # Match all requests
+  # All requests require authentication by default.
   config.middleware.use "Rack::Ntlm", {
-    :uri_pattern => /\/login/                       # (default = /\//) (any URL)
-    :host => '<Active Directory hostname>',
-    :port => 389,                                   # default = 389
-    :base => 'Base namespace for LDAP search',
-    :search_filter => '(dn=%1)'                     # default = (sAMAccountName=%1)
-    :auth => {
-      :username => '<username to bind to LDAP>',
-      :password => '<password to bind to LDAP>'
-    }
+    :logger => Log4r::Logger['ntlm'],               # any logger that quacks like a ruby Logger (.debug, .info) etc
+    :authenticator => YourOwnAuthObject.new()       # .auth(env, user, workstation, domain) will be called
   }
 
-Then run:
+  # If any of the provided patterns do not match, authentication is skipped for that request.
+  # Match a request to /login?something=1&other=2 using Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.1; Trident/6.0)
+  config.middleware.use "Rack::Ntlm", {
+    :uri_pattern => /\/login/,                      # Pattern must match ENV['PATH_INFO'] (optional)
+    :query_pattern => /something=1/,                # Pattern must match ENV['QUERY_STRING'] (optional)
+    :agent_pattern => /windows/,                    # Pattern must match ENV['HTTP_USER_AGENT'] (optional)
+    :logger => Log4r::Logger['ntlm'],               # any logger that quacks like a ruby Logger (.debug, .info) etc
+    :authenticator => YourOwnAuthObject.new()       # .auth(env, user, workstation, domain) will be called
+  }
 
-  rake gems:install
-  rake gems:unpack (optional, if you want to vendor the gem)
 
 == Example
 
@@ -62,6 +61,7 @@ When a client needs to authenticate itself to a proxy or server using the NTLM s
 
 6: C <--  S   200 Ok
 
+
 == Copyright
 
-Copyright (c) 2009-2010 [Rack-Ntlm], released under the MIT license
+Copyright (c) 2009-2013 [Rack-Ntlm], released under the MIT license

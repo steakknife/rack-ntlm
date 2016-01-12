@@ -10,7 +10,7 @@ begin
     gem.description = %Q{Rack middleware for transparent authentication with NTLM. This is a fork from lukefx/rack-ntlm on Github. This makes the Rack middleware a gem and uses net/ldap to search the user against an ActiveDirectory server. This is work in progress, so contributions are welcome.}
     gem.email = "dtsato@gmail.com"
     gem.homepage = "http://github.com/dtsato/rack-ntlm"
-    gem.authors = ["Danilo Sato"]
+    gem.authors = ["Danilo Sato", "Steve Lawson", "Matt Conover"]
     
     gem.has_rdoc = true
     gem.rdoc_options = ["--main", "README.rdoc", "--inline-source", "--line-numbers"]
@@ -18,8 +18,7 @@ begin
 
     gem.test_files = Dir['test/**/*'] + Dir['test/*']
     
-    gem.add_dependency('rubyntlm', '>= 0.1.1')
-    gem.add_dependency('net-ldap', '>= 0.0.5')    
+    gem.add_dependency('rubyntlm', '0.1.2.cv')
   end
   
   Jeweler::GemcutterTasks.new

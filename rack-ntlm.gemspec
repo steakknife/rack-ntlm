@@ -5,10 +5,10 @@
 
 Gem::Specification.new do |s|
   s.name = %q{rack-ntlm}
-  s.version = "0.0.1"
+  s.version = "0.2.2.cv"
 
   s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
-  s.authors = ["Danilo Sato"]
+  s.authors = ["Danilo Sato", "Matt Conover", "Steve Lawson"]
   s.date = %q{2010-03-02}
   s.description = %q{Rack middleware for transparent authentication with NTLM. This is a fork from lukefx/rack-ntlm on Github. This makes the Rack middleware a gem and uses net/ldap to search the user against an ActiveDirectory server. This is work in progress, so contributions are welcome.}
   s.email = %q{dtsato@gmail.com}
@@ -42,15 +42,12 @@ Gem::Specification.new do |s|
     s.specification_version = 3
 
     if Gem::Version.new(Gem::RubyGemsVersion) >= Gem::Version.new('1.2.0') then
-      s.add_runtime_dependency(%q<rubyntlm>, [">= 0.1.1"])
-      s.add_runtime_dependency(%q<net-ldap>, [">= 0.0.5"])
+      s.add_runtime_dependency(%q<rubyntlm>, ["0.1.3.cv"])
     else
-      s.add_dependency(%q<rubyntlm>, [">= 0.1.1"])
-      s.add_dependency(%q<net-ldap>, [">= 0.0.5"])
+      s.add_dependency(%q<rubyntlm>, ["0.1.3.cv"])
     end
   else
-    s.add_dependency(%q<rubyntlm>, [">= 0.1.1"])
-    s.add_dependency(%q<net-ldap>, [">= 0.0.5"])
+    s.add_dependency(%q<rubyntlm>, ["0.1.3.cv"])
   end
 end
 

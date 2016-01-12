@@ -1,57 +1,169 @@
 require 'net/ntlm'
-require 'net/ldap'
 
 module Rack
-
   class Ntlm
-    
+    NTLM_GET_HASH_REGEX = /^(NTLM|Negotiate) (.+)/
+
+    attr_reader :logger
+
     def initialize(app, config = {})
-      @app = app
-      @config = {
-        :uri_pattern => /\//,
-        :port => 389,
-        :search_filter => "(sAMAccountName=%1)"
-      }.merge(config)
+      @app    = app
+      @config = {}.merge(config)
+      @logger = @config[:logger] || ::Logger.new(STDOUT)
+      @authenticator = @config[:authenticator]
     end
 
-    def auth(user)
-      ldap = Net::LDAP.new
-      ldap.host = @config[:host]
-      ldap.port = @config[:port]
-      ldap.base = @config[:base]
-      ldap.auth @config[:auth][:username], @config[:auth][:password] if @config[:auth]
-      !ldap.search(:filter => @config[:search_filter].gsub("%1", user)).empty?
-    rescue => e
-      false
+    def auth(env, user, workstation, domain)
+      return @authenticator.auth(env, user, workstation, domain) if @authenticator && @authenticator.respond_to?(:auth)
+      @logger.error 'You must pass an :authenticator that responds to #auth(env, user, workstation, domain) during middleware setup'
     end
 
     def call(env)
-      if env['PATH_INFO'] =~ @config[:uri_pattern] && env['HTTP_AUTHORIZATION'].blank?
-        return [401, {'WWW-Authenticate' => "NTLM"}, []]
+      return @app.call(env) unless authenticatable_url?(env)
+      return auth_response(env) if auth_required?(env)
+
+      message = decode_message(env)
+
+      if message.nil?
+        @app.call(env)
+      elsif challenge_request?(message)
+        challenge_response
+      elsif type3_request?(message)
+        user        = extract_user(env, message)
+        workstation = extract_workstation(env, message)
+        domain      = extract_domain(env, message)
+
+        auth(env, user, workstation, domain)
+
+        @app.call(env)
+      else
+        unsupported_response
+      end
+    end
+
+
+    ### States
+
+    def authenticatable_url?(env)
+      authenticatable = true  # authenticate by default
+
+      if @config.has_key?(:agent_pattern)
+        unless env['HTTP_USER_AGENT'] =~ @config[:agent_pattern]
+          authenticatable = false
+          @logger.debug %/Skip authentication: User agent "#{env['HTTP_USER_AGENT']}" did not match "#{@config[:agent_pattern]}"/
+        end
       end
 
-      if /^(NTLM|Negotiate) (.+)/ =~ env["HTTP_AUTHORIZATION"]
-
-        message = Net::NTLM::Message.decode64($2)
-
-        if message.type == 1 
-          type2 = Net::NTLM::Message::Type2.new
-          return [401, {"WWW-Authenticate" => "NTLM " + type2.encode64}, []]
+      if @config.has_key?(:query_pattern)
+        unless env['QUERY_STRING'] =~ @config[:query_pattern]
+          authenticatable = false
+          @logger.debug %/Skip authentication: Query "#{env['QUERY_STRING']}" did not match "#{@config[:query_pattern]}"/
         end
+      end
 
-        if message.type == 3 && env['PATH_INFO'] =~ @config[:uri_pattern]
-          user = Net::NTLM::decode_utf16le(message.user)
-          if auth(user)
-            env['REMOTE_USER'] = user 
-          else
-            return [401, {}, ["You are not authorized to see this page"]]
-          end
+      if @config.has_key?(:uri_pattern)
+        unless env['PATH_INFO'] =~ @config[:uri_pattern]
+          authenticatable = false
+          @logger.debug %/Skip authentication: URI "#{env['PATH_INFO']}" did not match "#{@config[:uri_pattern]}"/
         end
-    	end
+      end
 
-      @app.call(env)
+      if authenticatable
+        @logger.info 'Authenticating URL "%s"' % [env['PATH_INFO']]
+      elsif ntlm_authorization?(env)
+        authenticatable = true
+        @logger.info 'Authorization: "%s"' % [env['HTTP_AUTHORIZATION']]
+      end
+
+      authenticatable
+    end
+
+    def ntlm_authorization?(env)
+      NTLM_GET_HASH_REGEX =~ env['HTTP_AUTHORIZATION']
+    end
+
+    def auth_required?(env)
+      !env.has_key?('HTTP_AUTHORIZATION')
+    end
+
+    def challenge_request?(message)
+      message && 1 == message.type
+    end
+
+    def type3_request?(message)
+      message && 3 == message.type
+    end
+
+
+    ### Responses
+
+    def auth_response(env)
+      @logger.info "Starting NTLM authentication on URL: #{env['PATH_INFO']}"
+      [401, {'WWW-Authenticate' => 'NTLM'}, []]
+    end
+
+    def unsupported_response
+      [401, {}, ['Your browser does not support Integrated Windows Authentication']]
+    end
+
+    def challenge_response
+      [401, {'WWW-Authenticate' => challenge_message}, []]
+    end
+
+    def challenge_message
+      type2 = Net::NTLM::Message::Type2.new
+
+      type2.flag      |= Net::NTLM::FLAGS[:NTLM]
+      type2.flag      |= Net::NTLM::FLAGS[:NTLM2_KEY]
+      type2.flag      |= Net::NTLM::FLAGS[:KEY128]
+      type2.flag      |= Net::NTLM::FLAGS[:KEY56]
+      type2.challenge = challenge_token
+
+      'NTLM ' + type2.encode64
+    end
+
+    def challenge_token
+      rand((2**64) - 1)
+    end
+
+
+    ### Decode
+
+    def decode_message(env)
+      matches = env['HTTP_AUTHORIZATION'].to_s.match(NTLM_GET_HASH_REGEX) or return nil
+
+      ntlm_hash = matches.captures[1].to_s
+      message = Net::NTLM::Message.decode64(ntlm_hash)
+
+      @logger.debug "Message: #{message.inspect}"
+      @logger.info "Received NTLM authentication to #{env['PATH_INFO']} (type #{message.type})"
+
+      message
+    end
+
+    def extract_domain(env, message)
+      domain = Net::NTLM::decode_utf16le(message.domain.to_s)
+
+      @logger.info %/Domain: "#{domain}"/
+
+      env['DOMAIN'] = domain
+    end
+
+    def extract_workstation(env, message)
+      workstation = Net::NTLM::decode_utf16le(message.workstation.to_s)
+
+      @logger.info %/Workstation: "#{workstation}"/
+
+      env['WORKSTATION'] = workstation
+    end
+
+    def extract_user(env, message)
+      user = Net::NTLM::decode_utf16le(message.user.to_s)
+
+      @logger.info %/User: "#{user}"/
+
+      env['USERNAME'] = user
     end
 
   end
-
 end
